@@ -5,7 +5,7 @@ from alphacore.engine import train_and_predict, run_backtest
 def print_prediction(result):
     print("\n==============================")
     print("FinMan AlphaCore")
-    print("Meta Neural Prediction Report")
+    print("Target Architecture Prediction Report")
     print("==============================")
 
     print(f"Ticker: {result['ticker']}")
@@ -20,6 +20,11 @@ def print_prediction(result):
     print("------------------------------------")
     print(result["forecast"].to_string(index=False))
 
+    print("\nSimilar Historical Setup")
+    print("------------------------------------")
+    for key, value in result["similar_setup"].items():
+        print(f"{key}: {value:.2f}" if isinstance(value, float) else f"{key}: {value}")
+
     print("\nTop Signal")
     print("------------------------------------")
     print(result["top_signal"])
@@ -31,6 +36,14 @@ def print_prediction(result):
     print("\nStrategy Scores")
     print("------------------------------------")
     print(result["scores"].to_string())
+
+    print("\nAdaptive Weights")
+    print("------------------------------------")
+    print(result["adaptive_weights"].to_string(index=False))
+
+    print("\nStrategy Historical Performance")
+    print("------------------------------------")
+    print(result["strategy_performance"].to_string(index=False))
 
     print("\nMeta Features Used")
     print("------------------------------------")
@@ -64,15 +77,8 @@ def print_backtest(result):
         bullish = metrics["bullish_hit_rate"]
         bearish = metrics["bearish_hit_rate"]
 
-        print(
-            "Bullish Hit Rate: "
-            + ("N/A" if bullish is None else f"{bullish:.2f}%")
-        )
-
-        print(
-            "Bearish Hit Rate: "
-            + ("N/A" if bearish is None else f"{bearish:.2f}%")
-        )
+        print("Bullish Hit Rate: " + ("N/A" if bullish is None else f"{bullish:.2f}%"))
+        print("Bearish Hit Rate: " + ("N/A" if bearish is None else f"{bearish:.2f}%"))
 
     print("\nRecent Backtest Rows")
     print("------------------------------------")
@@ -81,33 +87,13 @@ def print_backtest(result):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run FinMan AlphaCore Meta Neural prediction and backtest"
+        description="Run FinMan AlphaCore target architecture prediction and backtest"
     )
 
-    parser.add_argument(
-        "--ticker",
-        required=True,
-        help="Stock ticker symbol, e.g. AAPL"
-    )
-
-    parser.add_argument(
-        "--backtest",
-        action="store_true",
-        help="Run historical backtest"
-    )
-
-    parser.add_argument(
-        "--period",
-        default="3y",
-        help="Yahoo Finance period, e.g. 1y, 2y, 3y, 5y"
-    )
-
-    parser.add_argument(
-        "--step-size",
-        type=int,
-        default=10,
-        help="Backtest step size in trading days"
-    )
+    parser.add_argument("--ticker", required=True, help="Ticker symbol, e.g. AAPL")
+    parser.add_argument("--backtest", action="store_true", help="Run historical backtest")
+    parser.add_argument("--period", default="3y", help="Yahoo period, e.g. 1y, 3y, 5y")
+    parser.add_argument("--step-size", type=int, default=10, help="Backtest step size")
 
     args = parser.parse_args()
 

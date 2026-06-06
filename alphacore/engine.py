@@ -6,6 +6,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error
+from sklearn.metrics.pairwise import cosine_similarity
 
 from ta.momentum import RSIIndicator
 from ta.trend import ADXIndicator, MACD
@@ -52,8 +53,7 @@ def fetch_data(ticker, period="3y"):
 
     spy = spy[["Close"]].rename(columns={"Close": "SPY_Close"})
 
-    data = stock.join(spy, how="inner")
-    return data.dropna()
+    return stock.join(spy, how="inner").dropna()
 
 
 def detect_market_regime(row):
@@ -70,13 +70,12 @@ def detect_market_regime(row):
 
 
 def regime_score(regime):
-    mapping = {
+    return {
         "Bull Trend": 1.0,
         "Sideways / Mixed": 0.5,
         "High Volatility": 0.25,
         "Bear Trend": 0.0,
-    }
-    return mapping.get(regime, 0.5)
+    }.get(regime, 0.5)
 
 
 def build_time_decay_weights(length):
@@ -136,6 +135,7 @@ def build_strategy_scores(data):
     df["spy_trend"] = spy_close / spy_close.rolling(50).mean()
 
     df["momentum"] = normalize(df["return_20"])
+
     df["trend_following"] = normalize(
         ((close > df["sma_20"]).astype(int) * 25)
         + ((close > df["sma_50"]).astype(int) * 25)
@@ -155,29 +155,168 @@ def build_strategy_scores(data):
     return df
 
 
+def calculate_strategy_performance(df, strategy_cols, target_col="target_14"):
+    performance = {}
+
+    for strategy in strategy_cols:
+        valid = df[[strategy, target_col]].dropna()
+
+        if len(valid) < 50:
+            performance[strategy] = {
+                "hit_rate": 50.0,
+                "avg_return_when_strong": 0.0,
+                "sample_size": len(valid),
+            }
+            continue
+
+        threshold = valid[strategy].quantile(0.65)
+        strong_signals = valid[valid[strategy] >= threshold]
+
+        if strong_signals.empty:
+            hit_rate = 50.0
+            avg_return = 0.0
+        else:
+            hit_rate = (strong_signals[target_col] > 0).mean() * 100
+            avg_return = strong_signals[target_col].mean() * 100
+
+        performance[strategy] = {
+            "hit_rate": hit_rate,
+            "avg_return_when_strong": avg_return,
+            "sample_size": len(strong_signals),
+        }
+
+    return performance
+
+
+def build_adaptive_weights(strategy_performance):
+    raw_scores = {}
+
+    for strategy, stats in strategy_performance.items():
+        hit_component = max(stats["hit_rate"] - 50, 0)
+        return_component = max(stats["avg_return_when_strong"], 0)
+        seed_component = STRATEGY_WEIGHTS.get(strategy, 0.01) * 100
+
+        raw_scores[strategy] = (
+            hit_component * 0.50
+            + return_component * 0.30
+            + seed_component * 0.20
+        )
+
+    total = sum(raw_scores.values())
+
+    if total <= 0:
+        return STRATEGY_WEIGHTS.copy()
+
+    return {
+        strategy: score / total
+        for strategy, score in raw_scores.items()
+    }
+
+
+def calculate_weighted_score(df, weights, output_col):
+    df[output_col] = sum(
+        df[strategy] * weight
+        for strategy, weight in weights.items()
+    )
+    return df
+
+
+def find_similar_setups(df, strategy_cols, top_n=25):
+    if len(df) < top_n + 30:
+        return {
+            "similar_count": 0,
+            "avg_14_day_return": 0.0,
+            "success_rate": 0.0,
+        }
+
+    historical = df.iloc[:-14].copy()
+    latest = df.iloc[[-1]][strategy_cols]
+
+    historical_features = historical[strategy_cols]
+
+    similarities = cosine_similarity(
+        historical_features,
+        latest
+    ).flatten()
+
+    historical["similarity"] = similarities
+
+    top_matches = historical.sort_values(
+        "similarity",
+        ascending=False
+    ).head(top_n)
+
+    valid = top_matches[["target_14", "similarity"]].dropna()
+
+    if valid.empty:
+        return {
+            "similar_count": 0,
+            "avg_14_day_return": 0.0,
+            "success_rate": 0.0,
+        }
+
+    return {
+        "similar_count": len(valid),
+        "avg_14_day_return": valid["target_14"].mean() * 100,
+        "success_rate": (valid["target_14"] > 0).mean() * 100,
+        "avg_similarity": valid["similarity"].mean() * 100,
+    }
+
+
 def build_meta_dataset(data):
     df = build_strategy_scores(data)
     strategy_cols = list(STRATEGY_WEIGHTS.keys())
-
-    df["seed_weighted_score"] = sum(
-        df[col] * weight for col, weight in STRATEGY_WEIGHTS.items()
-    )
-
-    df["regime"] = df.apply(detect_market_regime, axis=1)
-    df["regime_score"] = df["regime"].apply(regime_score)
 
     df["target_5"] = df["Close"].shift(-5) / df["Close"] - 1
     df["target_10"] = df["Close"].shift(-10) / df["Close"] - 1
     df["target_14"] = df["Close"].shift(-14) / df["Close"] - 1
 
+    df["regime"] = df.apply(detect_market_regime, axis=1)
+    df["regime_score"] = df["regime"].apply(regime_score)
+
+    df = calculate_weighted_score(
+        df,
+        STRATEGY_WEIGHTS,
+        "seed_weighted_score"
+    )
+
+    clean_df = df.dropna().copy()
+
+    strategy_performance = calculate_strategy_performance(
+        clean_df,
+        strategy_cols,
+        target_col="target_14"
+    )
+
+    adaptive_weights = build_adaptive_weights(strategy_performance)
+
+    clean_df = calculate_weighted_score(
+        clean_df,
+        adaptive_weights,
+        "adaptive_weighted_score"
+    )
+
+    similar_setup = find_similar_setups(clean_df, strategy_cols)
+
+    clean_df["similar_setup_return"] = similar_setup["avg_14_day_return"]
+    clean_df["similar_setup_success_rate"] = similar_setup["success_rate"]
+
     meta_features = strategy_cols + [
         "seed_weighted_score",
+        "adaptive_weighted_score",
         "regime_score",
+        "similar_setup_return",
+        "similar_setup_success_rate",
     ]
 
-    df = df.dropna()
-
-    return df, strategy_cols, meta_features
+    return (
+        clean_df,
+        strategy_cols,
+        meta_features,
+        strategy_performance,
+        adaptive_weights,
+        similar_setup,
+    )
 
 
 def train_meta_neural_network(X_train, y_train):
@@ -204,10 +343,10 @@ def train_meta_neural_network(X_train, y_train):
             y_train,
             meta_neural__sample_weight=sample_weights
         )
-        weighting_mode = "Meta neural network with time-decay training"
+        weighting_mode = "Meta neural network with adaptive weights and time-decay training"
     except TypeError:
         model.fit(X_train, y_train)
-        weighting_mode = "Meta neural network standard training"
+        weighting_mode = "Meta neural network with adaptive weights"
 
     return model, weighting_mode
 
@@ -224,34 +363,19 @@ def calculate_backtest_metrics(backtest_df):
         if valid.empty:
             continue
 
-        direction_correct = (
-            np.sign(valid[pred_col]) == np.sign(valid[actual_col])
-        ).mean()
-
-        mae = mean_absolute_error(valid[actual_col], valid[pred_col])
-
-        avg_predicted = valid[pred_col].mean()
-        avg_actual = valid[actual_col].mean()
-
-        bullish_trades = valid[valid[pred_col] > 0]
-        bearish_trades = valid[valid[pred_col] < 0]
-
-        bullish_hit_rate = None
-        bearish_hit_rate = None
-
-        if not bullish_trades.empty:
-            bullish_hit_rate = (bullish_trades[actual_col] > 0).mean()
-
-        if not bearish_trades.empty:
-            bearish_hit_rate = (bearish_trades[actual_col] < 0).mean()
-
         metrics[f"{horizon}_day"] = {
-            "direction_accuracy": direction_correct * 100,
-            "mae": mae,
-            "avg_predicted_return": avg_predicted * 100,
-            "avg_actual_return": avg_actual * 100,
-            "bullish_hit_rate": None if bullish_hit_rate is None else bullish_hit_rate * 100,
-            "bearish_hit_rate": None if bearish_hit_rate is None else bearish_hit_rate * 100,
+            "direction_accuracy": (
+                np.sign(valid[pred_col]) == np.sign(valid[actual_col])
+            ).mean() * 100,
+            "mae": mean_absolute_error(valid[actual_col], valid[pred_col]),
+            "avg_predicted_return": valid[pred_col].mean() * 100,
+            "avg_actual_return": valid[actual_col].mean() * 100,
+            "bullish_hit_rate": (
+                valid[valid[pred_col] > 0][actual_col] > 0
+            ).mean() * 100 if not valid[valid[pred_col] > 0].empty else None,
+            "bearish_hit_rate": (
+                valid[valid[pred_col] < 0][actual_col] < 0
+            ).mean() * 100 if not valid[valid[pred_col] < 0].empty else None,
             "samples": len(valid),
         }
 
@@ -260,7 +384,15 @@ def calculate_backtest_metrics(backtest_df):
 
 def run_backtest(ticker, period="3y", min_train_size=260, step_size=10):
     data = fetch_data(ticker, period=period)
-    df, strategy_cols, meta_features = build_meta_dataset(data)
+
+    (
+        df,
+        strategy_cols,
+        meta_features,
+        strategy_performance,
+        adaptive_weights,
+        similar_setup,
+    ) = build_meta_dataset(data)
 
     if len(df) < min_train_size + 50:
         raise ValueError("Not enough historical data to run backtest.")
@@ -274,7 +406,7 @@ def run_backtest(ticker, period="3y", min_train_size=260, step_size=10):
         X_train = train_df[meta_features]
         y_train = train_df[["target_5", "target_10", "target_14"]]
 
-        model, weighting_mode = train_meta_neural_network(X_train, y_train)
+        model, _ = train_meta_neural_network(X_train, y_train)
 
         prediction = model.predict(test_row[meta_features])[0]
 
@@ -291,12 +423,11 @@ def run_backtest(ticker, period="3y", min_train_size=260, step_size=10):
         })
 
     backtest_df = pd.DataFrame(rows)
-    metrics = calculate_backtest_metrics(backtest_df)
 
     return {
         "ticker": ticker.upper(),
         "backtest": backtest_df,
-        "metrics": metrics,
+        "metrics": calculate_backtest_metrics(backtest_df),
         "samples": len(backtest_df),
         "period": period,
         "min_train_size": min_train_size,
@@ -306,7 +437,15 @@ def run_backtest(ticker, period="3y", min_train_size=260, step_size=10):
 
 def train_and_predict(ticker):
     data = fetch_data(ticker)
-    df, strategy_cols, meta_features = build_meta_dataset(data)
+
+    (
+        df,
+        strategy_cols,
+        meta_features,
+        strategy_performance,
+        adaptive_weights,
+        similar_setup,
+    ) = build_meta_dataset(data)
 
     if len(df) < 250:
         raise ValueError("Not enough historical data to train the meta neural network.")
@@ -355,6 +494,19 @@ def train_and_predict(ticker):
     else:
         bias = "Neutral"
 
+    adaptive_weights_df = pd.DataFrame({
+        "strategy": list(adaptive_weights.keys()),
+        "adaptive_weight": [v * 100 for v in adaptive_weights.values()],
+        "seed_weight": [
+            STRATEGY_WEIGHTS.get(k, 0) * 100 for k in adaptive_weights.keys()
+        ],
+    })
+
+    strategy_performance_df = pd.DataFrame(strategy_performance).T.reset_index()
+    strategy_performance_df = strategy_performance_df.rename(
+        columns={"index": "strategy"}
+    )
+
     return {
         "ticker": ticker.upper(),
         "latest_price": latest_close,
@@ -368,4 +520,7 @@ def train_and_predict(ticker):
         "weighting_mode": weighting_mode,
         "current_regime": current_regime,
         "meta_features": meta_features,
+        "adaptive_weights": adaptive_weights_df,
+        "strategy_performance": strategy_performance_df,
+        "similar_setup": similar_setup,
     }
