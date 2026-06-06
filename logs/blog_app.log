@@ -1,0 +1,53 @@
+ * Serving Flask app 'blog_app'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://5.78.211.239:8080
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [06/Jun/2026 20:49:20] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 20:57:37] code 400, message Bad request version ('\x00\x12\x00\x10\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01\x00\x17\x00\x00\x00')
+142.115.113.141 - - [06/Jun/2026 20:57:37] "[31m[1m\x16\x03\x01\x07\x00\x01\x00\x06ü\x03\x03Ì·aEQ05åçöuW/âHÆ^J\x9c\x11t\x06Ô'z6\x8cá\x93\x8b\x1dy T\x10Õ¢\x12Q¡Æ'\x9aÁµ\x9dÎÀ{\x1bFÂYZ\x8fµXQïp \x98ÉbÃ\x00 ªª\x13\x01\x13\x02\x13\x03À+À/À,À0Ì©Ì¨À\x13À\x14\x00\x9c\x00\x9d\x00/\x005\x01\x00\x06\x93JJ\x00\x00\x00\x1b\x00\x03\x02\x00\x02\x00#\x00\x00\x00\x0d\x00\x12\x00\x10\x04\x03\x08\x04\x04\x01\x05\x03\x08\x05\x05\x01\x08\x06\x06\x01\x00\x17\x00\x00\x00[0m" 400 -
+142.115.113.141 - - [06/Jun/2026 20:57:37] code 400, message Bad request version ('\x9a\x9a\x13\x01\x13\x02\x13\x03À+À/À,À0Ì©Ì¨À\x13À\x14\x00\x9c\x00\x9d\x00/\x005\x01\x00\x06s::\x00\x00\x00')
+142.115.113.141 - - [06/Jun/2026 20:57:37] "[31m[1m\x16\x03\x01\x06à\x01\x00\x06Ü\x03\x03\x9b¶$?Âë¹kïElþ\x9d=\x8f\x0cØªN&@¯\x1a\x9a\x84è\x01ÂJ\x9a\x9d¯ j&H\x96 \x01É\x8bGÇëX9aÕ\x9f-c:\x09º\x9f\x18\x81d\x98u6>\x89\x17>\x00 \x9a\x9a\x13\x01\x13\x02\x13\x03À+À/À,À0Ì©Ì¨À\x13À\x14\x00\x9c\x00\x9d\x00/\x005\x01\x00\x06s::\x00\x00\x00[0m" 400 -
+142.115.113.141 - - [06/Jun/2026 20:58:41] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 20:58:42] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 20:58:53] "GET /data/today.json HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 20:58:57] "GET /history HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 20:59:01] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:04:59] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:05:00] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:05:01] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 21:10:07] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 21:13:00] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 21:13:00] "GET /performance.svg HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 21:13:29] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jun/2026 21:13:29] "[36mGET /performance.svg HTTP/1.1[0m" 304 -
+142.115.113.141 - - [06/Jun/2026 21:16:24] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:16:24] "GET /performance.svg HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:16:25] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:16:25] "[36mGET /performance.svg HTTP/1.1[0m" 304 -
+142.115.113.141 - - [06/Jun/2026 21:25:52] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:25:52] "GET /performance.svg HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:25:52] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:08] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:26:08] "[36mGET /performance.svg HTTP/1.1[0m" 304 -
+142.115.113.141 - - [06/Jun/2026 21:26:08] "[36mGET /performance.svg HTTP/1.1[0m" 304 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /apple-touch-icon-precomposed.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /apple-touch-icon.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /apple-touch-icon-120x120-precomposed.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /apple-touch-icon-120x120.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:18] "[33mGET /apple-touch-icon-precomposed.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:19] "[33mGET /apple-touch-icon.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:19] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:19] "[33mGET /apple-touch-icon-120x120-precomposed.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:19] "[33mGET /apple-touch-icon-120x120.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:19] "[33mGET /apple-touch-icon-precomposed.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:20] "[33mGET /apple-touch-icon.png HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:26:20] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+142.115.113.141 - - [06/Jun/2026 21:36:12] "GET / HTTP/1.1" 200 -
+142.115.113.141 - - [06/Jun/2026 21:36:13] "[36mGET /performance.svg HTTP/1.1[0m" 304 -
+185.226.93.242 - - [06/Jun/2026 21:40:30] "[33mGET /login HTTP/1.1[0m" 404 -
