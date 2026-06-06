@@ -5,7 +5,6 @@ import numpy as np
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 
 from ta.momentum import RSIIndicator
@@ -137,7 +136,6 @@ def build_strategy_scores(data):
     df["spy_trend"] = spy_close / spy_close.rolling(50).mean()
 
     df["momentum"] = normalize(df["return_20"])
-
     df["trend_following"] = normalize(
         ((close > df["sma_20"]).astype(int) * 25)
         + ((close > df["sma_50"]).astype(int) * 25)
@@ -159,7 +157,6 @@ def build_strategy_scores(data):
 
 def build_meta_dataset(data):
     df = build_strategy_scores(data)
-
     strategy_cols = list(STRATEGY_WEIGHTS.keys())
 
     df["seed_weighted_score"] = sum(
@@ -215,6 +212,98 @@ def train_meta_neural_network(X_train, y_train):
     return model, weighting_mode
 
 
+def calculate_backtest_metrics(backtest_df):
+    metrics = {}
+
+    for horizon in [5, 10, 14]:
+        pred_col = f"predicted_{horizon}"
+        actual_col = f"actual_{horizon}"
+
+        valid = backtest_df[[pred_col, actual_col]].dropna()
+
+        if valid.empty:
+            continue
+
+        direction_correct = (
+            np.sign(valid[pred_col]) == np.sign(valid[actual_col])
+        ).mean()
+
+        mae = mean_absolute_error(valid[actual_col], valid[pred_col])
+
+        avg_predicted = valid[pred_col].mean()
+        avg_actual = valid[actual_col].mean()
+
+        bullish_trades = valid[valid[pred_col] > 0]
+        bearish_trades = valid[valid[pred_col] < 0]
+
+        bullish_hit_rate = None
+        bearish_hit_rate = None
+
+        if not bullish_trades.empty:
+            bullish_hit_rate = (bullish_trades[actual_col] > 0).mean()
+
+        if not bearish_trades.empty:
+            bearish_hit_rate = (bearish_trades[actual_col] < 0).mean()
+
+        metrics[f"{horizon}_day"] = {
+            "direction_accuracy": direction_correct * 100,
+            "mae": mae,
+            "avg_predicted_return": avg_predicted * 100,
+            "avg_actual_return": avg_actual * 100,
+            "bullish_hit_rate": None if bullish_hit_rate is None else bullish_hit_rate * 100,
+            "bearish_hit_rate": None if bearish_hit_rate is None else bearish_hit_rate * 100,
+            "samples": len(valid),
+        }
+
+    return metrics
+
+
+def run_backtest(ticker, period="3y", min_train_size=260, step_size=10):
+    data = fetch_data(ticker, period=period)
+    df, strategy_cols, meta_features = build_meta_dataset(data)
+
+    if len(df) < min_train_size + 50:
+        raise ValueError("Not enough historical data to run backtest.")
+
+    rows = []
+
+    for i in range(min_train_size, len(df) - 14, step_size):
+        train_df = df.iloc[:i]
+        test_row = df.iloc[[i]]
+
+        X_train = train_df[meta_features]
+        y_train = train_df[["target_5", "target_10", "target_14"]]
+
+        model, weighting_mode = train_meta_neural_network(X_train, y_train)
+
+        prediction = model.predict(test_row[meta_features])[0]
+
+        rows.append({
+            "date": df.index[i],
+            "close": float(test_row["Close"].iloc[0]),
+            "regime": test_row["regime"].iloc[0],
+            "predicted_5": prediction[0],
+            "predicted_10": prediction[1],
+            "predicted_14": prediction[2],
+            "actual_5": float(test_row["target_5"].iloc[0]),
+            "actual_10": float(test_row["target_10"].iloc[0]),
+            "actual_14": float(test_row["target_14"].iloc[0]),
+        })
+
+    backtest_df = pd.DataFrame(rows)
+    metrics = calculate_backtest_metrics(backtest_df)
+
+    return {
+        "ticker": ticker.upper(),
+        "backtest": backtest_df,
+        "metrics": metrics,
+        "samples": len(backtest_df),
+        "period": period,
+        "min_train_size": min_train_size,
+        "step_size": step_size,
+    }
+
+
 def train_and_predict(ticker):
     data = fetch_data(ticker)
     df, strategy_cols, meta_features = build_meta_dataset(data)
@@ -222,22 +311,23 @@ def train_and_predict(ticker):
     if len(df) < 250:
         raise ValueError("Not enough historical data to train the meta neural network.")
 
-    X = df[meta_features]
-    y = df[["target_5", "target_10", "target_14"]]
+    split_index = int(len(df) * 0.8)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        shuffle=False
-    )
+    train_df = df.iloc[:split_index]
+    test_df = df.iloc[split_index:]
+
+    X_train = train_df[meta_features]
+    y_train = train_df[["target_5", "target_10", "target_14"]]
+
+    X_test = test_df[meta_features]
+    y_test = test_df[["target_5", "target_10", "target_14"]]
 
     model, weighting_mode = train_meta_neural_network(X_train, y_train)
 
     preds_test = model.predict(X_test)
     mae = mean_absolute_error(y_test, preds_test)
 
-    latest_features = X.tail(1)
+    latest_features = df[meta_features].tail(1)
     prediction = model.predict(latest_features)[0]
 
     latest_close = float(df["Close"].iloc[-1])
