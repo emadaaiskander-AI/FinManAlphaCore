@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from alphacore import train_and_predict, STRATEGY_WEIGHTS
+from alphacore.engine import train_and_predict, STRATEGY_WEIGHTS
 
 st.set_page_config(
     page_title="FinMan AlphaCore",
