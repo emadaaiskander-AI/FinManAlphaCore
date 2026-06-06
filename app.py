@@ -1,199 +1,156 @@
 import streamlit as st
-import pandas as pd
-
-from alphacore.engine import train_and_predict, run_backtest, STRATEGY_WEIGHTS
+import subprocess
+import re
 
 
 st.set_page_config(
     page_title="FinMan AlphaCore",
-    layout="wide"
+    page_icon="📈",
+    layout="wide",
 )
 
 
-st.title("FinMan AlphaCore")
-st.subheader("Target Architecture: Adaptive Meta Neural Technical Forecast Engine")
+def extract(pattern, text, default="N/A"):
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else default
 
-st.markdown(
-    """
-FinMan AlphaCore evaluates technical strategy engines, calculates per-stock historical strategy performance, 
-builds adaptive weights, compares the current setup against similar historical setups, and feeds the results into a meta neural network.
-"""
-)
+
+def reliability_label(similar_count):
+    if similar_count >= 100:
+        return "High"
+    if similar_count >= 25:
+        return "Medium"
+    return "Low"
+
+
+def run_prediction(ticker):
+    result = subprocess.run(
+        ["python", "predict.py", "--ticker", ticker],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+
+    output = result.stdout + "\n" + result.stderr
+
+    similar_count = int(float(extract(r"similar_count:\s*([0-9.]+)", output, "0")))
+
+    return {
+        "raw_output": output,
+        "ticker": ticker.upper(),
+        "latest_price": extract(r"Latest Price:\s*\$?([0-9.]+)", output, "0"),
+        "regime": extract(r"Current Regime:\s*(.+)", output),
+        "bias": extract(r"Bias:\s*(.+)", output),
+        "confidence": float(extract(r"Confidence:\s*([0-9.]+)%", output, "0")),
+        "mae": extract(r"Model MAE:\s*([0-9.]+)", output),
+        "expected_5_day_return": extract(r"5 Trading Days\s+([\-0-9.]+)", output, "0"),
+        "predicted_5_day_price": extract(r"5 Trading Days\s+[\-0-9.]+\s+([0-9.]+)", output, "0"),
+        "expected_10_day_return": extract(r"10 Trading Days\s+([\-0-9.]+)", output, "0"),
+        "predicted_10_day_price": extract(r"10 Trading Days\s+[\-0-9.]+\s+([0-9.]+)", output, "0"),
+        "expected_14_day_return": extract(r"14 Trading Days\s+([\-0-9.]+)", output, "0"),
+        "predicted_14_day_price": extract(r"14 Trading Days\s+[\-0-9.]+\s+([0-9.]+)", output, "0"),
+        "similar_count": similar_count,
+        "similar_success_rate": float(extract(r"success_rate:\s*([0-9.]+)", output, "0")),
+        "avg_similarity": float(extract(r"avg_similarity:\s*([0-9.]+)", output, "0")),
+        "avg_14_day_return": extract(r"avg_14_day_return:\s*([\-0-9.]+)", output, "0"),
+        "reliability": reliability_label(similar_count),
+        "top_signal": extract(r"Top Signal\s*-+\s*(.+)", output),
+        "weakest_signal": extract(r"Weakest Signal\s*-+\s*(.+)", output),
+    }
+
+
+def quality_label(confidence, success_rate, similar_count):
+    if success_rate >= 70 and similar_count >= 100 and confidence >= 55:
+        return "Strong Evidence"
+    if success_rate >= 65 and similar_count >= 25:
+        return "Moderate Evidence"
+    if success_rate >= 80 and similar_count < 25:
+        return "Interesting but Low Sample"
+    return "Weak / Needs Review"
+
+
+st.title("FinMan AlphaCore Prediction")
+st.caption("Technology Experiment • Not Financial Advice")
 
 ticker = st.text_input("Enter stock ticker", value="AAPL").upper().strip()
 
-col_a, col_b = st.columns(2)
+run_button = st.button("Run Prediction")
 
-with col_a:
-    run_prediction = st.button("Run AlphaCore Prediction")
+if run_button and ticker:
+    with st.spinner(f"Running AlphaCore prediction for {ticker}..."):
+        try:
+            result = run_prediction(ticker)
 
-with col_b:
-    run_backtest_button = st.button("Run Prediction + Backtest")
-
-
-def display_prediction(result):
-    st.success(f"Prediction completed for {result['ticker']}")
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    c1.metric("Latest Price", f"${result['latest_price']:.2f}")
-    c2.metric("Bias", result["bias"])
-    c3.metric("Confidence", f"{result['confidence']:.1f}%")
-    c4.metric("Model MAE", f"{result['model_mae']:.4f}")
-    c5.metric("Regime", result["current_regime"])
-
-    st.divider()
-
-    st.subheader("Forecast")
-
-    forecast = result["forecast"].copy()
-    forecast["Expected Return %"] = forecast["Expected Return %"].map(
-        lambda x: f"{x:.2f}%"
-    )
-    forecast["Predicted Price"] = forecast["Predicted Price"].map(
-        lambda x: f"${x:.2f}"
-    )
-
-    st.dataframe(forecast, use_container_width=True)
-
-    st.divider()
-
-    st.subheader("Similar Historical Setup")
-
-    similar = result["similar_setup"]
-
-    s1, s2, s3, s4 = st.columns(4)
-
-    s1.metric("Similar Matches", similar.get("similar_count", 0))
-    s2.metric("Avg 14D Return", f"{similar.get('avg_14_day_return', 0):.2f}%")
-    s3.metric("Success Rate", f"{similar.get('success_rate', 0):.1f}%")
-    s4.metric("Avg Similarity", f"{similar.get('avg_similarity', 0):.1f}%")
-
-    st.divider()
-
-    st.subheader("Strategy Scores")
-
-    scores = result["scores"].copy()
-    scores["Seed Weight %"] = scores.index.map(
-        lambda x: STRATEGY_WEIGHTS.get(x, 0) * 100
-    )
-
-    scores = scores.reset_index().rename(
-        columns={
-            "index": "Strategy",
-            "score": "Score",
-        }
-    )
-
-    scores["Score"] = scores["Score"].map(lambda x: round(float(x), 2))
-    scores["Seed Weight %"] = scores["Seed Weight %"].map(lambda x: round(float(x), 2))
-
-    st.dataframe(scores, use_container_width=True)
-
-    st.divider()
-
-    st.subheader("Adaptive Weights")
-
-    adaptive_weights = result["adaptive_weights"].copy()
-    adaptive_weights["adaptive_weight"] = adaptive_weights["adaptive_weight"].map(
-        lambda x: round(float(x), 2)
-    )
-    adaptive_weights["seed_weight"] = adaptive_weights["seed_weight"].map(
-        lambda x: round(float(x), 2)
-    )
-
-    st.dataframe(adaptive_weights, use_container_width=True)
-
-    st.divider()
-
-    st.subheader("Strategy Historical Performance")
-
-    strategy_performance = result["strategy_performance"].copy()
-
-    for col in ["hit_rate", "avg_return_when_strong"]:
-        if col in strategy_performance.columns:
-            strategy_performance[col] = strategy_performance[col].map(
-                lambda x: round(float(x), 2)
+            evidence_label = quality_label(
+                result["confidence"],
+                result["similar_success_rate"],
+                result["similar_count"],
             )
 
-    st.dataframe(strategy_performance, use_container_width=True)
+            st.subheader(f"{result['ticker']} Prediction Summary")
 
-    st.divider()
+            col1, col2, col3, col4 = st.columns(4)
 
-    left, right = st.columns(2)
+            col1.metric("Bias", result["bias"])
+            col2.metric("Confidence", f"{result['confidence']:.1f}%")
+            col3.metric("Historical Accuracy", f"{result['similar_success_rate']:.1f}%")
+            col4.metric("Reliability", result["reliability"])
 
-    with left:
-        st.subheader("Signal Attribution")
-        st.write(f"**Top Supporting Signal:** {result['top_signal']}")
-        st.write(f"**Weakest Signal:** {result['weakest_signal']}")
-        st.write(f"**Training Mode:** {result['weighting_mode']}")
+            st.divider()
 
-    with right:
-        st.subheader("Meta Neural Inputs")
-        for feature in result["meta_features"]:
-            st.write(f"- {feature}")
+            col5, col6, col7, col8 = st.columns(4)
 
-    st.divider()
+            col5.metric("Similar Setups", result["similar_count"])
+            col6.metric("Avg Similarity", f"{result['avg_similarity']:.1f}%")
+            col7.metric("Evidence Label", evidence_label)
+            col8.metric("Current Regime", result["regime"])
 
-    st.warning(
-        "Disclaimer: FinMan AlphaCore is an experimental technical-analysis model. "
-        "It is not financial advice and should not be used as the sole basis for trading or investment decisions."
-    )
+            st.divider()
 
+            st.subheader("Forecast")
 
-def display_backtest(result):
-    st.subheader("Backtest Results")
+            forecast_data = {
+                "Horizon": ["5 Trading Days", "10 Trading Days", "14 Trading Days"],
+                "Expected Return %": [
+                    result["expected_5_day_return"],
+                    result["expected_10_day_return"],
+                    result["expected_14_day_return"],
+                ],
+                "Predicted Price": [
+                    f"${result['predicted_5_day_price']}",
+                    f"${result['predicted_10_day_price']}",
+                    f"${result['predicted_14_day_price']}",
+                ],
+            }
 
-    st.write(f"**Ticker:** {result['ticker']}")
-    st.write(f"**Period:** {result['period']}")
-    st.write(f"**Samples:** {result['samples']}")
-    st.write(f"**Step Size:** {result['step_size']}")
+            st.table(forecast_data)
 
-    metrics_rows = []
+            st.subheader("Signal Explanation")
 
-    for horizon, metrics in result["metrics"].items():
-        metrics_rows.append({
-            "Horizon": horizon.replace("_", " ").title(),
-            "Samples": metrics["samples"],
-            "Direction Accuracy %": round(metrics["direction_accuracy"], 2),
-            "MAE": round(metrics["mae"], 4),
-            "Avg Predicted Return %": round(metrics["avg_predicted_return"], 2),
-            "Avg Actual Return %": round(metrics["avg_actual_return"], 2),
-            "Bullish Hit Rate %": (
-                None if metrics["bullish_hit_rate"] is None
-                else round(metrics["bullish_hit_rate"], 2)
-            ),
-            "Bearish Hit Rate %": (
-                None if metrics["bearish_hit_rate"] is None
-                else round(metrics["bearish_hit_rate"], 2)
-            ),
-        })
+            col9, col10, col11 = st.columns(3)
 
-    st.dataframe(pd.DataFrame(metrics_rows), use_container_width=True)
+            col9.metric("Top Signal", result["top_signal"])
+            col10.metric("Weakest Signal", result["weakest_signal"])
+            col11.metric("Model MAE", result["mae"])
 
-    st.subheader("Recent Backtest Rows")
-    st.dataframe(result["backtest"].tail(25), use_container_width=True)
+            st.info(
+                "Confidence reflects the model's current conviction. "
+                "Historical accuracy reflects how similar setups performed in the past. "
+                "Similar setup count and reliability help judge how much evidence supports the result."
+            )
 
+            st.subheader("Raw AlphaCore Report")
 
-if run_prediction or run_backtest_button:
-    if not ticker:
-        st.error("Please enter a valid ticker.")
-    else:
-        with st.spinner(
-            "Running AlphaCore target architecture: Yahoo data, strategy scores, adaptive weights, similar setup engine, meta neural prediction..."
-        ):
-            try:
-                prediction_result = train_and_predict(ticker)
-                display_prediction(prediction_result)
+            with st.expander("Show full report"):
+                st.code(result["raw_output"])
 
-                if run_backtest_button:
-                    with st.spinner("Running historical backtest..."):
-                        backtest_result = run_backtest(
-                            ticker=ticker,
-                            period="3y",
-                            step_size=20,
-                        )
-                        display_backtest(backtest_result)
+            st.divider()
 
-            except Exception as e:
-                st.error(f"Error: {e}")
+            st.caption(
+                "Disclaimer: FinMan AlphaCore is an experimental AI and market research project. "
+                "This is a technology demonstration and not financial advice, investment advice, "
+                "trading advice, or a recommendation to buy or sell any security."
+            )
+
+        except Exception as e:
+            st.error(f"Prediction failed: {e}")
