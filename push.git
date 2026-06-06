@@ -1,0 +1,2 @@
+git remote set-url origin git@github.com:emadaaiskander-AI/FinManAlphaCore.git
+git push -u origin main
