@@ -19,7 +19,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-MAX_TICKERS_PER_SECTOR = 50
+MAX_TICKERS_PER_SECTOR = 100
 BENCHMARK = "SPY"
 
 
