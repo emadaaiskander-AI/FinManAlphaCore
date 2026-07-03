@@ -19,8 +19,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 today = datetime.now().strftime("%Y-%m-%d")
 
-MAX_TICKERS_PER_SECTOR = 100
+MAX_TOTAL_TICKERS = 2000
+MIN_CONFIDENCE = 20
 BENCHMARK = "SPY"
+SECTOR_FILE = DATA_DIR / "sector_tickers.json"
 
 
 SECTORS = {
@@ -69,9 +71,25 @@ SECTORS = {
 }
 
 
+def load_sectors():
+    if SECTOR_FILE.exists():
+        print(f"Loading sectors from {SECTOR_FILE}")
+        return json.loads(SECTOR_FILE.read_text(encoding="utf-8"))
+
+    print("Using fallback hardcoded SECTORS list")
+    return SECTORS
+
+
 def extract(pattern, text, default="N/A"):
     match = re.search(pattern, text)
     return match.group(1).strip() if match else default
+
+
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return default
 
 
 def reliability_label(similar_count):
@@ -93,20 +111,20 @@ def run_prediction(ticker):
 
     output = result.stdout + "\n" + result.stderr
 
-    similar_count = int(float(extract(r"similar_count:\s*([0-9.]+)", output, "0")))
+    similar_count = int(safe_float(extract(r"similar_count:\s*([0-9.]+)", output, "0")))
 
     return {
         "ticker": ticker,
-        "latest_price": float(extract(r"Latest Price:\s*\$?([0-9.]+)", output, "0")),
+        "latest_price": safe_float(extract(r"Latest Price:\s*\$?([0-9.]+)", output, "0")),
         "regime": extract(r"Current Regime:\s*(.+)", output),
         "bias": extract(r"Bias:\s*(.+)", output),
-        "confidence": float(extract(r"Confidence:\s*([0-9.]+)%", output, "0")),
+        "confidence": safe_float(extract(r"Confidence:\s*([0-9.]+)%", output, "0")),
         "mae": extract(r"Model MAE:\s*([0-9.]+)", output),
-        "expected_14_day_return": float(extract(r"14 Trading Days\s+([\-0-9.]+)", output, "0")),
-        "predicted_14_day_price": extract(r"14 Trading Days\s+[\-0-9.]+\s+([0-9.]+)", output, "0"),
+        "expected_14_day_return": safe_float(extract(r"14 Trading Days\s+([\-0-9.]+)", output, "0")),
+        "predicted_14_day_price": extract(r"14 Trading Days\s+[\-0-9.]+\s+\$?([0-9.]+)", output, "0"),
         "similar_count": similar_count,
-        "similar_success_rate": float(extract(r"success_rate:\s*([0-9.]+)", output, "0")),
-        "avg_similarity": float(extract(r"avg_similarity:\s*([0-9.]+)", output, "0")),
+        "similar_success_rate": safe_float(extract(r"success_rate:\s*([0-9.]+)", output, "0")),
+        "avg_similarity": safe_float(extract(r"avg_similarity:\s*([0-9.]+)", output, "0")),
         "reliability": reliability_label(similar_count),
         "top_signal": extract(r"Top Signal\s*-+\s*(.+)", output),
         "weakest_signal": extract(r"Weakest Signal\s*-+\s*(.+)", output),
@@ -176,6 +194,14 @@ def update_real_performance(picks_history):
         h for h in picks_history
         if pd.to_datetime(h["date"]) >= pd.to_datetime(cutoff_date)
     ]
+
+    if not active_history:
+        return {
+            "period": "Last 2 Weeks",
+            "alphacore_basket": "+0.0%",
+            "spy": "+0.0%",
+            "excess_return": "+0.0%",
+        }
 
     tickers = {BENCHMARK}
 
@@ -267,19 +293,54 @@ def update_real_performance(picks_history):
     }
 
 
-daily_picks = []
+loaded_sectors = load_sectors()
 
-for sector, tickers in SECTORS.items():
+total_available = sum(len(tickers) for tickers in loaded_sectors.values())
+
+print(f"Target scan size: {MAX_TOTAL_TICKERS}")
+print(f"Available tickers: {total_available}")
+print(f"Minimum confidence for selected picks: {MIN_CONFIDENCE}%")
+
+daily_picks = []
+scanned_count = 0
+skipped_low_confidence = 0
+skipped_invalid_price = 0
+
+for sector, tickers in loaded_sectors.items():
+    if scanned_count >= MAX_TOTAL_TICKERS:
+        break
+
     results = []
-    selected_tickers = tickers[:MAX_TICKERS_PER_SECTOR]
+
+    remaining_slots = MAX_TOTAL_TICKERS - scanned_count
+    selected_tickers = tickers[:remaining_slots]
 
     print(f"\nRunning sector: {sector}")
-    print(f"Tickers: {len(selected_tickers)}")
+    print(f"Tickers selected from sector: {len(selected_tickers)}")
 
     for ticker in selected_tickers:
+        if scanned_count >= MAX_TOTAL_TICKERS:
+            break
+
         try:
             prediction = run_prediction(ticker)
+            scanned_count += 1
+
             prediction["sector"] = sector
+
+            if prediction["confidence"] < MIN_CONFIDENCE:
+                skipped_low_confidence += 1
+                print(
+                    f"Skipped {ticker}: confidence "
+                    f"{prediction['confidence']:.1f}% below {MIN_CONFIDENCE}%"
+                )
+                continue
+
+            if prediction["latest_price"] <= 0:
+                skipped_invalid_price += 1
+                print(f"Skipped {ticker}: invalid latest price")
+                continue
+
             prediction["score"] = score_pick(prediction)
             results.append(prediction)
 
@@ -294,12 +355,15 @@ for sector, tickers in SECTORS.items():
             )
 
         except Exception as e:
+            scanned_count += 1
             print(f"Failed {ticker}: {e}")
 
     if results:
         best = sorted(results, key=lambda x: x["score"], reverse=True)[0]
         daily_picks.append(best)
         print(f"Best for {sector}: {best['ticker']}")
+    else:
+        print(f"No valid pick for {sector} after filtering")
 
 
 picks_history = save_today_picks(daily_picks)
@@ -346,6 +410,17 @@ post = f"""# FinMan AlphaCore Daily Picks – {today}
 |---|---|---|---:|---:|---:|---:|---|---:|---:|---|
 {rows}
 
+## Scan Summary
+
+| Metric | Value |
+|---|---:|
+| Target Scan Size | {MAX_TOTAL_TICKERS} |
+| Actual Scanned | {scanned_count} |
+| Minimum Confidence | {MIN_CONFIDENCE}% |
+| Skipped Low Confidence | {skipped_low_confidence} |
+| Skipped Invalid Price | {skipped_invalid_price} |
+| Published Picks | {len(daily_picks)} |
+
 ## Rolling 2-Week Performance
 
 | Period | AlphaCore Basket | SPY | Excess Return |
@@ -379,6 +454,11 @@ json_file.write_text(
     json.dumps(
         {
             "date": today,
+            "target_scan_size": MAX_TOTAL_TICKERS,
+            "actual_scanned": scanned_count,
+            "min_confidence": MIN_CONFIDENCE,
+            "skipped_low_confidence": skipped_low_confidence,
+            "skipped_invalid_price": skipped_invalid_price,
             "daily_picks": daily_picks,
             "performance": performance,
             "disclaimer": disclaimer.strip(),
@@ -388,7 +468,13 @@ json_file.write_text(
     encoding="utf-8",
 )
 
-print(f"\nGenerated blog post: {post_file}")
+print(f"\nScan completed")
+print(f"Target scan size: {MAX_TOTAL_TICKERS}")
+print(f"Actual scanned: {scanned_count}")
+print(f"Skipped low confidence: {skipped_low_confidence}")
+print(f"Skipped invalid price: {skipped_invalid_price}")
+print(f"Published picks: {len(daily_picks)}")
+print(f"Generated blog post: {post_file}")
 print(f"Updated latest page: {latest_file}")
 print(f"Updated JSON data: {json_file}")
 print(f"Updated picks history: {DATA_DIR / 'picks_history.json'}")
