@@ -1,0 +1,32 @@
+[
+  {
+    "sector": "Financials",
+    "ticker": "MMC",
+    "reason": "inactive_or_no_recent_data"
+  },
+  {
+    "sector": "Financials",
+    "ticker": "DFS",
+    "reason": "inactive_or_no_recent_data"
+  },
+  {
+    "sector": "Energy",
+    "ticker": "HES",
+    "reason": "inactive_or_no_recent_data"
+  },
+  {
+    "sector": "Energy",
+    "ticker": "CTRA",
+    "reason": "inactive_or_no_recent_data"
+  },
+  {
+    "sector": "Energy",
+    "ticker": "MRO",
+    "reason": "inactive_or_no_recent_data"
+  },
+  {
+    "sector": "Energy",
+    "ticker": "CIVI",
+    "reason": "inactive_or_no_recent_data"
+  }
+]

@@ -4,5 +4,125 @@
     "alphacore": 0.0,
     "spy": 0.0,
     "excess": 0.0
+  },
+  {
+    "date": "2026-06-08",
+    "alphacore": 0.0,
+    "spy": 0.0,
+    "excess": 0.0
+  },
+  {
+    "date": "2026-06-09",
+    "alphacore": 0.0,
+    "spy": 0.0,
+    "excess": 0.0
+  },
+  {
+    "date": "2026-06-10",
+    "alphacore": 0.0,
+    "spy": 0.0,
+    "excess": 0.0
+  },
+  {
+    "date": "2026-06-11",
+    "alphacore": 0.28,
+    "spy": -0.15,
+    "excess": 0.42
+  },
+  {
+    "date": "2026-06-12",
+    "alphacore": 0.93,
+    "spy": 0.4,
+    "excess": 0.53
+  },
+  {
+    "date": "2026-06-15",
+    "alphacore": 1.49,
+    "spy": 0.75,
+    "excess": 0.74
+  },
+  {
+    "date": "2026-06-16",
+    "alphacore": 1.39,
+    "spy": 0.75,
+    "excess": 0.64
+  },
+  {
+    "date": "2026-06-17",
+    "alphacore": 1.59,
+    "spy": 1.29,
+    "excess": 0.3
+  },
+  {
+    "date": "2026-06-18",
+    "alphacore": 0.78,
+    "spy": 0.02,
+    "excess": 0.76
+  },
+  {
+    "date": "2026-06-19",
+    "alphacore": 0.78,
+    "spy": 0.02,
+    "excess": 0.76
+  },
+  {
+    "date": "2026-06-22",
+    "alphacore": 1.15,
+    "spy": 0.94,
+    "excess": 0.21
+  },
+  {
+    "date": "2026-06-23",
+    "alphacore": 1.9,
+    "spy": 0.51,
+    "excess": 1.39
+  },
+  {
+    "date": "2026-06-24",
+    "alphacore": 1.21,
+    "spy": -0.87,
+    "excess": 2.08
+  },
+  {
+    "date": "2026-06-25",
+    "alphacore": 1.37,
+    "spy": -0.85,
+    "excess": 2.22
+  },
+  {
+    "date": "2026-06-26",
+    "alphacore": 2.06,
+    "spy": -0.65,
+    "excess": 2.71
+  },
+  {
+    "date": "2026-06-29",
+    "alphacore": 2.08,
+    "spy": -1.29,
+    "excess": 3.37
+  },
+  {
+    "date": "2026-06-30",
+    "alphacore": 2.31,
+    "spy": 0.28,
+    "excess": 2.03
+  },
+  {
+    "date": "2026-07-01",
+    "alphacore": 1.77,
+    "spy": 0.83,
+    "excess": 0.94
+  },
+  {
+    "date": "2026-07-02",
+    "alphacore": 0.82,
+    "spy": 0.6,
+    "excess": 0.22
+  },
+  {
+    "date": "2026-07-03",
+    "alphacore": 2.23,
+    "spy": 0.42,
+    "excess": 1.82
   }
 ]
